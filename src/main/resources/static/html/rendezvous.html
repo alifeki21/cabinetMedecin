@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Cabinet Med - Rendez-vous</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+        <a class="navbar-brand" href="index.html">CabinetMed</a>
+        <div class="collapse navbar-collapse">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="medecins.html">Médecins</a></li>
+                <li class="nav-item"><a class="nav-link" href="patients.html">Patients</a></li>
+                <li class="nav-item"><a class="nav-link active" href="rendezvous.html">Rendez-vous</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card shadow">
+                <div class="card-header bg-white"><h5>Planifier un RDV</h5></div>
+                <div class="card-body">
+                    <form id="rdvForm">
+                        <label class="form-label">Médecin</label>
+                        <select id="selectMedecin" class="form-select mb-3" required></select>
+
+                        <label class="form-label">Patient</label>
+                        <select id="selectPatient" class="form-select mb-3" required></select>
+
+                        <label class="form-label">Date et Heure</label>
+                        <input type="datetime-local" id="rdvDate" class="form-control mb-3" required>
+
+                        <label class="form-label">Motif</label>
+                        <textarea id="rdvMotif" class="form-control mb-3" rows="2"></textarea>
+
+                        <button type="submit" class="btn btn-primary w-100">Confirmer le RDV</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-body">
+                    <table class="table table-striped">
+                        <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Médecin</th>
+                            <th>Patient</th>
+                            <th>Statut</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody id="rdvList"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_RDV = "http://localhost:8080/api/rendezvous";
+
+    async function init() {
+        // Charger les listes déroulantes
+        const [mRes, pRes, rRes] = await Promise.all([
+            fetch("http://localhost:8080/api/medecins"),
+            fetch("http://localhost:8080/api/patients"),
+            fetch(API_RDV)
+        ]);
+
+        const medecins = await mRes.json();
+        const patients = await pRes.json();
+        const rdvs = await rRes.json();
+
+        document.getElementById('selectMedecin').innerHTML = medecins.map(m => `<option value="${m.id}">${m.nom} (${m.specialite})</option>`).join('');
+        document.getElementById('selectPatient').innerHTML = patients.map(p => `<option value="${p.id}">${p.nom} ${p.prenom}</option>`).join('');
+
+        renderTable(rdvs);
+    }
+
+    function renderTable(data) {
+        document.getElementById('rdvList').innerHTML = data.map(r => `
+            <tr>
+                <td>${r.dateHeure}</td>
+                <td>Dr. ${r.medecin.nom}</td>
+                <td>${r.patient.nom}</td>
+                <td><span class="badge ${r.statut === 'ANNULE' ? 'bg-danger' : 'bg-success'}">${r.statut}</span></td>
+                <td>
+                    ${r.statut !== 'ANNULE' ? `<button onclick="annuler(${r.id})" class="btn btn-sm btn-warning">Annuler</button>` : ''}
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    document.getElementById('rdvForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const medId = document.getElementById('selectMedecin').value;
+        const patId = document.getElementById('selectPatient').value;
+        const rdvBody = {
+            dateHeure: document.getElementById('rdvDate').value.replace('T', ' '),
+            motif: document.getElementById('rdvMotif').value
+        };
+
+        await fetch(`${API_RDV}?medecinId=${medId}&patientId=${patId}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(rdvBody)
+        });
+        init();
+    });
+
+    async function annuler(id) {
+        await fetch(`${API_RDV}/${id}/annuler`, { method: 'PUT' });
+        init();
+    }
+
+    init();
+</script>
+</body>
+</html>
